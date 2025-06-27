@@ -1,136 +1,75 @@
-# @okxweb3/hardhat-explorer-verify
+# AWS Amazon S3 to AWS Lambda - Create a Lambda function that resizes images uploaded to S3
 
-[English](./README.md)
-[Chinese](./README_ZH.md)
+The SAM template deploys a Lambda function, an S3 bucket and the IAM resources required to run the application. A Lambda function consumes <code>ObjectCreated</code> events from an Amazon S3 bucket. The Lambda code checks the uploaded file is an image and creates a thumbnail version of the image in the same bucket.
 
-## Background
+Learn more about this pattern at Serverless Land Patterns: [https://serverlessland.com/patterns/s3-lambda-resizing-node](https://serverlessland.com/patterns/s3-lambda-resizing-node)
 
-The `@okxweb3/hardhat-explorer-verify` plugin is designed for the Hardhat framework to verify smart contracts deployed on the EVM chains including X Layer. This plugin focuses on verifying that the deployed contract code matches the original source code, thus enhancing the transparency and trustworthiness of smart contracts. Users can utilize this plugin to verify their contracts on the OKX Chain blockchain explorer without the need for manual submissions.
+Important: this application uses various AWS services and there are costs associated with these services after the Free Tier usage - please see the [AWS Pricing page](https://aws.amazon.com/pricing/) for details. You are responsible for any AWS costs incurred. No warranty is implied in this example.
 
-## Features
+## Requirements
 
-- **Automated Verification**: Simplifies the verification process by automatically extracting contract information from the Hardhat project and submitting it to the OKX Chain explorer.
-- **Security**: Ensures that the deployed contracts are identical to the source code, enhancing contract security.
-- **Ease of Use**: The integration is straightforward, requiring minimal configuration to get started.
+* [Create an AWS account](https://portal.aws.amazon.com/gp/aws/developer/registration/index.html) if you do not already have one and log in. The IAM user that you use must have sufficient permissions to make necessary AWS service calls and manage AWS resources.
+* [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) installed and configured
+* [Git Installed](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
+* [AWS Serverless Application Model](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html) (AWS SAM) installed
 
-## Installation
+## Deployment Instructions
 
-To install this plugin in your Hardhat project, use the following command:
+1. Create a new directory, navigate to that directory in a terminal and clone the GitHub repository:
+    ``` 
+    git clone https://github.com/aws-samples/serverless-patterns
+    ```
+1. Change directory to the pattern directory:
+    ```
+    cd s3-lambda-resizing-node
+    ```
+1. From the command line, use AWS SAM to build and deploy the AWS resources for the pattern as specified in the template.yml file:
+    ```
+    sam build
+    sam deploy --guided
+    ```
+1. During the prompts:
+    * Enter a stack name
+    * Enter the desired AWS Region
+    * Allow SAM CLI to create IAM roles with the required permissions.
 
-```bash
-npm install @okxweb3/hardhat-explorer-verify
-```
+    Once you have run `sam deploy -guided` mode once and saved arguments to a configuration file (samconfig.toml), you can use `sam deploy` in future to use these defaults.
 
-## Usage
+1. Note the outputs from the SAM deployment process. These contain the resource names and/or ARNs which are used for testing.
 
-1. **Install the Plugin**: As described in the installation section, first install the `@okxweb3/hardhat-explorer-verify` plugin in your project.
+## How it works
 
-2. **Configure Hardhat**: In your Hardhat configuration file (usually `hardhat.config.js` or `hardhat.config.ts`), import and configure the plugin. Ensure your network configuration and API keys are correctly set.
+* Use the AWS CLI upload an image to S3
+* If the object is a .jpg or a .png, the code creates a thumbnail and saves it to the target bucket. 
+* The code assumes that the destination bucket exists and its name is a concatenation of the source bucket name followed by the string -resized
 
-   Here is a sample configuration:
+==============================================
 
-   ```javascript
-   import { HardhatUserConfig } from "hardhat/config";
-   import "@nomicfoundation/hardhat-toolbox";
-   import '@okxweb3/hardhat-explorer-verify';  // Import the plugin
+## Testing
 
-   const config: HardhatUserConfig = {
-     solidity: "0.8.24",
-     sourcify: {
-       enabled: true,
-     },
-     networks: {
-       xlayer: {
-         url: "https://xlayerrpc.example.com",
-         accounts: ["<Your Wallet Private Key>"],
-       },
-     },
-     etherscan: {
-        apiKey: '...'
-     },
-     okxweb3explorer: {
-       apiKey: "<Your API Key>",
-     }
-   };
-
-   export default config;
-   ```
-
-3. **Verify Contracts**: After deploying the contracts, use Hardhat to run the verification script. This typically involves running a specific Hardhat task that automatically fetches contract data and submits it to the OKX Chain explorer for verification.
-
-Example command:
+Run the following S3 CLI  command to upload an image to the S3 bucket. Note, you must edit the {SourceBucketName} placeholder with the name of the S3 Bucket. This is provided in the stack outputs.
 
 ```bash
-npx hardhat okverify --network xlayer <Your Contract Address>
+aws s3 cp './events/example.jpg'  s3://{SourceBucketName}
 ```
 
-4. **View Verification Results**: Once verification is successful, you can view the verification status and the contract code on the OKX Chain blockchain explorer.
-
-![deploy](./public/deploy.png)
-
-5. **Verify TransparentUpgradeableProxy Contract**
-
-Example command:
-```bash
-npx hardhat okverify --network xlayer --contract <Contract>:<Name> --proxy <address>
-```
-
-- `--proxy`: mention it's a proxy contract address.
-
-6. **Veirify Multiple Contracts Simultaneously**
-
-To simutaneously verify multiple contracts, you will need to creata a verification script where you include the deployed contract address and their constructor parameters. See the example below for reference:
-
-```ts
-// scripts/batchVerify.js
-async function main() {
-  const contractsToVerify = [
-    {
-      name: "ContractA",
-      address: "0x1234567890abcdef1234567890abcdef12345678", // replace to real address
-      args: [42], // replace to real constructor
-    },
-    {
-      name: "ContractB",
-      address: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-      args: ["Hello, Hardhat!"],
-    },
-    {
-      name: "ContractC",
-      address: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-      args: ["0xAbcdefabcdefabcdefabcdefabcdefabcdefAbc"],
-    },
-    // More
-    ...
-  ];
-
-  for (const contract of contractsToVerify) {
-    try {
-      await hre.run("verify:verify", {
-        address: contract.address,
-        constructorArguments: contract.args,
-      });
-      console.log(`${contract.name} verified at ${contract.address}`);
-    } catch (error) {
-      console.error(`Failed to verify ${contract.name} at ${contract.address}:`, error);
-    }
-  }
-}
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
-```
-
-Then run the verification script:
+Run the following command to check that a new version of the image has been created in the destination bucket.
 
 ```bash
-npx hardhat run --network <network-name> scripts/batchVerify.js
+aws s3 ls s3://{DestinationBucketName}
 ```
 
-**Note:**
-- If using **897 Contract**, don't add `--proxy`. Directly use `npx hardhat okverify --network xlayer --contract <Contract>:<Name>`
+## Cleanup
+ 
+1. Delete the stack
+    ```bash
+    aws cloudformation delete-stack --stack-name STACK_NAME
+    ```
+1. Confirm the stack has been deleted
+    ```bash
+    aws cloudformation list-stacks --query "StackSummaries[?contains(StackName,'STACK_NAME')].StackStatus"
+    ```
+----
+Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
-This document is designed to help developers effectively use the `@okxweb3/hardhat-explorer-verify` plugin. If you have questions or need further assistance, feel free to submit issues to the project's GitHub repository.
+SPDX-License-Identifier: MIT-0
